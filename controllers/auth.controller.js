@@ -10,9 +10,8 @@ const Patient = require("../models/patient.model");
 const generateToken = require("../utils/generateToken");
 const { generateOTP } = require("../utils/otpGenerator");
 const { initWhatsapp } = require("../utils/whatsappClient");
-const { cloudinary } = require('../config/cloudinary');
-const streamifier = require('streamifier');
-
+const { cloudinary } = require("../config/cloudinary");
+const streamifier = require("streamifier");
 
 exports.register = asyncHandler(async (req, res, next) => {
   const { name, email, password } = req.body;
@@ -140,11 +139,25 @@ exports.loginPhonePatient = asyncHandler(async (req, res, next) => {
 });
 
 exports.protect = asyncHandler(async (req, res, next) => {
-  const token = req.cookies.token;
+  // Get token from cookie or Authorization header
+  let token;
+
+  // Check for token in cookies first
+  if (req.cookies && req.cookies.token) {
+    token = req.cookies.token;
+  }
+  // Then check for Authorization header (Bearer token)
+  else if (
+    req.headers.authorization &&
+    req.headers.authorization.startsWith("Bearer")
+  ) {
+    token = req.headers.authorization.split(" ")[1];
+  }
+
   if (!token) {
     return next(
       new ApiError(
-        "You are not login, Please login to get access this route",
+        "You are not logged in. Please login to access this route",
         401
       )
     );
@@ -157,10 +170,7 @@ exports.protect = asyncHandler(async (req, res, next) => {
   const currentUser = await Staff.findById(decoded.userId);
   if (!currentUser) {
     return next(
-      new ApiError(
-        "The user that belong to this token does no longer exist",
-        401
-      )
+      new ApiError("The user that belongs to this token no longer exists", 401)
     );
   }
 
@@ -284,31 +294,31 @@ exports.uploadUserImage = uploadSingleImage("nationalIDImg");
 
 // Image processing
 exports.resizeImage = asyncHandler(async (req, res, next) => {
-    if (!req.file) return next();
+  if (!req.file) return next();
 
-    const filename = `nationalId-${uuidv4()}-${Date.now()}`;
+  const filename = `nationalId-${uuidv4()}-${Date.now()}`;
 
-    const buffer = await sharp(req.file.buffer)
-        .resize(600, 600)
-        .toFormat('jpeg')
-        .jpeg({ quality: 95 })
-        .toBuffer();
+  const buffer = await sharp(req.file.buffer)
+    .resize(600, 600)
+    .toFormat("jpeg")
+    .jpeg({ quality: 95 })
+    .toBuffer();
 
-    await new Promise((resolve, reject) => {
-        const upload_stream = cloudinary.uploader.upload_stream(
-        {
-            folder: 'patient/nationalId',
-            public_id: filename,
-            resource_type: 'image',
-        },
-        (error, result) => {
-            if (error) return reject(error);
-            req.body.nationalIDImg = result.secure_url; 
-            resolve();
-        }
-        );
-        streamifier.createReadStream(buffer).pipe(upload_stream);
-    });
+  await new Promise((resolve, reject) => {
+    const upload_stream = cloudinary.uploader.upload_stream(
+      {
+        folder: "patient/nationalId",
+        public_id: filename,
+        resource_type: "image",
+      },
+      (error, result) => {
+        if (error) return reject(error);
+        req.body.nationalIDImg = result.secure_url;
+        resolve();
+      }
+    );
+    streamifier.createReadStream(buffer).pipe(upload_stream);
+  });
 
-    next();
+  next();
 });
